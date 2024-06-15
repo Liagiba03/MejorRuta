@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ruta más corta</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+         html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: rgb(13, 6, 92); /* Color de fondo exterior */
+        }
+        /* Estilos para el mapa */
+        #map {
+            height: 400px;
+            width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .info {
+            margin-top: 20px;
+        }
+
+        .info p {
+            font-size: 1.1em;
+            color: #666;
+        }
+
+        .info p span {
+            font-weight: bold;
+            color: #333;
+        }
+
+        /* Estilo para el contenedor principal */
+        .container{
+            background-color: rgb(13, 6, 92);
+        }
+        .main-container {
+            background-color: #f8f9fa; /* Color de fondo */
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+            margin-top: 30px;
+        }
+
+        /* Estilos para los selectores y botón */
+        .selector {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .selector label {
+            font-size: 1.5rem; /* Ajustar tamaño de etiqueta según preferencia */
+            font-weight: bold;
+            text-align: center; /* Centrar el texto */
+        }
+
+        .selector select, .obtener-ruta-btn {
+            width: 100%;
+            max-width: 400px; /* Ajustar ancho máximo según preferencia */
+            margin: 0 auto; /* Centrar los selectores y el botón */
+        }
+
+        /* Estilos para las tarjetas */
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        /* Alineación específica para móviles */
+        @media (max-width: 768px) {
+            .selector label {
+                text-align: left; /* Ajustar alineación a la izquierda en pantallas pequeñas */
+            }
+        }
+    </style>
+    <script>
+        let map, directionsService, directionsRenderer;
+
+        function initMap() {
+            map = new google.maps.Map(document.getElementById('map'), {
+                zoom: 5,
+                center: { lat: 23.6345, lng: -102.5528 }
+            });
+
+            directionsService = new google.maps.DirectionsService();
+            directionsRenderer = new google.maps.DirectionsRenderer();
+            directionsRenderer.setMap(map);
+        }
+
+        function trazarRuta(coordenadasRuta, nodosIntermedios, distancia) {
+            const waypoints = coordenadasRuta.slice(1, -1).map(coord => ({
+                location: { lat: coord[0], lng: coord[1] },
+                stopover: true
+            }));
+
+            const origen = coordenadasRuta[0];
+            const destino = coordenadasRuta[coordenadasRuta.length - 1];
+
+            const request = {
+                origin: { lat: origen[0], lng: origen[1] },
+                destination: { lat: destino[0], lng: destino[1] },
+                waypoints: waypoints,
+                travelMode: google.maps.TravelMode.DRIVING
+            };
+
+            directionsService.route(request, (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    directionsRenderer.setDirections(result);
+
+                    let totalDistance = 0;
+                    result.routes[0].legs.forEach(leg => {
+                        totalDistance += leg.distance.value;
+                    });
+                    const distanceInKm = (totalDistance / 1000).toFixed(2);
+
+                    mostrarInfoRuta(nodosIntermedios, distanceInKm);
+                } else {
+                    alert('Error al obtener la ruta: ' + status);
+                }
+            });
+        }
+
+        function mostrarInfoRuta(nodosIntermedios, distancia) {
+            // Busca el contenedor de información existente y lo elimina si está presente
+            const existingInfoDiv = document.querySelector('.info');
+            if (existingInfoDiv) {
+                existingInfoDiv.innerHTML = ''; // Limpiar contenido existente si lo hubiera
+            } else {
+                return; // Salir si no se encuentra el contenedor de información
+            }
+
+            // Crea un nuevo contenedor de información
+            const infoDiv = document.createElement('div');
+            infoDiv.classList.add('info');
+
+            // Prepara el contenido de la información
+            const infoText = `<p>Ruta: <span>${nodosIntermedios}</span></p>
+                            <p>Distancia (km): <span>${distancia}</span> km</p>`;
+
+            // Inserta el nuevo contenido de la información
+            infoDiv.innerHTML = infoText;
+            existingInfoDiv.appendChild(infoDiv); // Insertar dentro del contenedor existente
+        }
+
+        function obtenerRuta() {
+            const ciudad_inicio = document.getElementById('ciudad_inicio').value;
+            const ciudad_final = document.getElementById('ciudad_final').value;
+
+            fetch('/get_routes', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ start: ciudad_inicio, end: ciudad_final })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                } else {
+                    trazarRuta(data.coordenadas_ruta, data.nodos_intermedios_encontrados, data.distancia);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Hubo un error al obtener la ruta.');
+            });
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="main-container bg-primary-subtle">
+            <h1 class="text-center mb-4">Cálculo: Ruta más corta</h1>
+            <div class="row">
+                <div class="selector col-md-6 mb-4">
+                        <label for="ciudad_inicio" class="form-label fs-3 text-center">INICIO:</label>
+                        <select id="ciudad_inicio" class="form-select">
+                            <option selected>Selecciona</option>
+                            {% for ciudad in ciudades %}
+                            <option value="{{ ciudad }}">{{ ciudad }}</option>
+                            {% endfor %}
+                        </select>
+                </div>
+                <div class="selector col-md-6 mb-4">
+                        <label for="ciudad_final" class="form-label fs-3 text-center">FIN:</label>
+                        <select id="ciudad_final" class="form-select">
+                            <option selected>Selecciona</option>
+                            {% for ciudad in ciudades %}
+                            <option value="{{ ciudad }}">{{ ciudad }}</option>
+                            {% endfor %}
+                        </select>
+                </div>
+                <div class="selector col-12 mb-4">
+                    <button onclick="obtenerRuta()" class="btn btn-info obtener-ruta-btn btn-lg w-100">Generar ruta</button>
+                </div>
+            </div>
+            <div class="card">
+                <div id="map"></div>
+            </div>
+            <div class="card">
+                <div class="info text-wrap">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JavaScript y API de Google Maps -->
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAjtBNMl6V7VEhgA0yAY5qZDuXqBq6yxWI&callback=initMap" async defer></script>
+</body>
+</html>
